@@ -200,7 +200,7 @@ input.good{background:rgba(52,199,89,.16);color:var(--green);font-weight:600}
    Terenska aplikacija PIŠE samo: posjeti, temp, cdez, dkv, ccp
                         ČITA još: strojevi, djelatnici
    ========================================================= */
-const APP_VER = '1.0.0';
+const APP_VER = '1.0.2';
 const LS = 'pnt_';
 const SB_URL = 'https://vvkyzqvdbbilrsqddnha.supabase.co';
 const SB_KEY = 'sb_publishable_OXQKeW6H3tTPrhNM1qihdg_WHkiB2UN';
@@ -283,7 +283,8 @@ async function authFresh(){
   if(AUTH.expires_at - 90 > Date.now()/1000) return true;
   if(!navigator.onLine) return false;
   if(!refP) refP = authCall('refresh_token', {refresh_token:AUTH.refresh_token})
-    .then(()=>true).catch(e=>{ if(e.status===400||e.status===401){ AUTH=null; lsSet('auth',null); } return false; })
+    .then(j=>{ authStore(j); return true; })                       // OBAVEZNO: spremi osvježeni token
+    .catch(e=>{ if(e.status===400||e.status===401){ AUTH=null; lsSet('auth',null); } return false; })
     .finally(()=>{ refP=null; });
   return refP;
 }
@@ -317,7 +318,9 @@ async function syncNow(manual){
       if(rows.length){
         const res = await sbFetch('haccp_zapisi', {method:'POST',
           headers:{Prefer:'resolution=merge-duplicates,return=minimal'}, body:JSON.stringify(rows)});
-        if(!res.ok) throw new Error('Slanje nije uspjelo ('+res.status+')');
+        if(!res.ok) throw new Error(res.status===401 ? 'Prijava je istekla – odjavite se i prijavite ponovno'
+                                   : res.status===403 ? 'Nemate pravo na ovaj unos'
+                                   : 'Slanje nije uspjelo ('+res.status+')');
       }
       keys.forEach(k=>delete DIRTY[k]);
     }
@@ -640,6 +643,9 @@ function renderTop(){
     const v=byId('posjeti', S.visitId)||{};
     t.innerHTML=`<button class="ibtn" data-a="back">${ic('back')}</button>
       <div style="flex:1;min-width:0"><h1>${esc(v.stroj||'')}</h1><div class="sub">${esc(strojNaziv(v.stroj))}</div></div>`;
+  } else if(S.name==='lozinka'){
+    t.innerHTML=`<button class="ibtn" data-a="back">${ic('back')}</button>
+      <div style="flex:1;min-width:0"><h1>Promjena lozinke</h1><div class="sub">${esc((AUTH&&AUTH.email)||'')}</div></div>`;
   } else {
     t.innerHTML=`<button class="ibtn" data-a="back">${ic('back')}</button>
       <div style="flex:1;min-width:0"><h1>${esc(TIP[S.type].n)}</h1><div class="sub">${esc(CUR.stroj)} · ${fDate(CUR.date)}</div></div>`;
@@ -664,7 +670,12 @@ function pgHome(){
   <div class="grp">${aktivniStrojevi().length ? aktivniStrojevi().map(s=>{const g=parseGps(s.gps);
       return `<div class="fr tap" data-a="rucno" data-o="${esc(s.oznaka)}">${ico('machine','#8e8e93')}<div class="lb">${esc(s.oznaka)}<small>${esc(strojNaziv(s.oznaka))} · ${g?'GPS '+g.lat+', '+g.lng:'<b style="color:var(--orange)">bez GPS koordinate</b>'}</small></div><span class="chev">${ic('chev')}</span></div>`;}).join('')
     : `<div class="fr"><div class="lb" style="color:var(--muted)">Registar aparata još nije preuzet</div></div>`}</div>
-  <div class="hint">Ručni odabir upisuje se kao <b>bez QR-a</b> i vidljiv je voditelju. Koristite ga samo ako je naljepnica oštećena.</div>`;
+  <div class="hint">Ručni odabir upisuje se kao <b>bez QR-a</b> i vidljiv je voditelju. Koristite ga samo ako je naljepnica oštećena.</div>
+  ${sec('Račun')}
+  <div class="grp">
+    ${row('user','#8e8e93','Prijavljeni', `<span style="color:var(--muted);font-size:14px">${esc((AUTH&&AUTH.email)||'')}</span>`)}
+    <div class="fr tap" data-a="lozinka">${ico('shield','#ff9500')}<div class="lb">Promijeni lozinku<small>Postavite lozinku koju samo vi znate</small></div><span class="chev">${ic('chev')}</span></div>
+  </div>`;
 }
 function pgVisit(){
   const v=byId('posjeti', S.visitId); if(!v) return '';
@@ -695,11 +706,45 @@ function render(){
       : `<button class="btn" style="flex:1" data-a="back">Odustani</button><button class="btn pri" style="flex:2" data-a="save">Spremi unos</button>`;
     if(S.lock) $$('#view input, #view select, #view textarea, #view .tri button, #view .chips button').forEach(el=>el.disabled=true);
   }
+  else if(S.name==='lozinka'){ $('#view').innerHTML=pgLozinka(); $('#foot').className='on';
+    $('#foot').innerHTML=`<button class="btn" style="flex:1" data-a="back">Odustani</button><button class="btn pri" style="flex:2" data-a="spremiLoz">Spremi lozinku</button>`; }
   else { $('#view').innerHTML=S.name==='visit'?pgVisit():pgHome(); $('#foot').className=''; $('#foot').innerHTML=''; }
   renderTop();
   window.scrollTo(0, S.keep?window.scrollY:0); S.keep=false;
 }
 function go(s){ S=s; render(); }
+
+/* ---------- promjena lozinke ---------- */
+function pgLozinka(){
+  return `<div class="demo">${ic('info')}<div>Nova lozinka mora imati najmanje <b>6 znakova</b>. Nakon promjene ostajete prijavljeni na ovom uređaju.</div></div>
+  ${sec('Nova lozinka')}
+  <div class="grp">
+    ${row('shield','#ff9500','Nova lozinka', `<input id="p1" type="password" autocomplete="new-password" style="max-width:170px">`)}
+    ${row('check','#34c759','Ponovite', `<input id="p2" type="password" autocomplete="new-password" style="max-width:170px">`)}
+  </div>
+  <div class="err" id="pErr" style="text-align:left;margin:10px 6px 0"></div>`;
+}
+async function spremiLozinku(){
+  const p1=($('#p1')||{}).value||'', p2=($('#p2')||{}).value||'', err=$('#pErr');
+  err.textContent='';
+  if(p1.length<6) return err.textContent='Lozinka mora imati najmanje 6 znakova';
+  if(p1!==p2)     return err.textContent='Lozinke se ne podudaraju';
+  if(!navigator.onLine) return err.textContent='Za promjenu lozinke potreban je internet';
+  const b=$('#foot .pri'); if(b){ b.disabled=true; b.textContent='Spremam…'; }
+  try{
+    if(!await authFresh()) throw new Error('Prijava je istekla – prijavite se ponovno');
+    const r = await fetch(SB_URL+'/auth/v1/user', {method:'PUT',
+      headers:{apikey:SB_KEY, Authorization:'Bearer '+AUTH.access_token, 'Content-Type':'application/json'},
+      body:JSON.stringify({password:p1})});
+    let j=null; try{ j=await r.json(); }catch(e){}
+    if(!r.ok) throw new Error(authErr(j, r.status));
+    toast('Lozinka je promijenjena');
+    go({name:'home'});
+  }catch(e){
+    err.textContent = e.message||'Promjena nije uspjela';
+    if(b){ b.disabled=false; b.textContent='Spremi lozinku'; }
+  }
+}
 
 /* ---------- dolazak ---------- */
 async function recordVisit(oznaka, izvor, at){
@@ -786,6 +831,8 @@ document.addEventListener('click',e=>{
   const a=b.dataset.a;
   if(a==='theme') return themeToggle();
   if(a==='logout') return logout();
+  if(a==='lozinka') return go({name:'lozinka'});
+  if(a==='spremiLoz') return spremiLozinku();
   if(a==='back') return go(S.name==='form'?{name:'visit', visitId:S.visitId}:{name:'home'});
   if(a==='scan') return openScanner();
   if(a==='rucno'){ if(!confirm('Zabilježiti dolazak bez skeniranja QR koda?\n\nUnos će biti označen kao ručni.')) return; return recordVisit(b.dataset.o,'ručno'); }
