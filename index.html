@@ -255,7 +255,7 @@ select.npak{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)
    Terenska aplikacija PIŠE samo: posjeti, temp, cdez, dkv, ccp
                         ČITA još: strojevi, djelatnici
    ========================================================= */
-const APP_VER = '1.2.0';
+const APP_VER = '1.2.1';
 const LS = 'pnt_';
 const SB_URL = 'https://vvkyzqvdbbilrsqddnha.supabase.co';
 const SB_KEY = 'sb_publishable_OXQKeW6H3tTPrhNM1qihdg_WHkiB2UN';
@@ -282,6 +282,9 @@ const IDB = {
 let DB = {}; KOL.forEach(k=>DB[k]=[]);
 let DIRTY = {};                 // "kol|id" -> vrijeme izmjene
 let LASTPULL = lsGet('lastPull', 0);
+// Nakon nadogradnje na 1.2 dodane su nove kolekcije (proizvodi, narudzbe).
+// Njihovi postojeći zapisi stariji su od zadnjeg dohvata, pa se jednom povlači sve.
+if(!lsGet('fullPull12', 0)){ LASTPULL = 0; lsSet('lastPull', 0); lsSet('fullPull12', 1); }
 
 async function loadDB(){
   await IDB.open();
@@ -381,12 +384,16 @@ async function syncNow(manual){
     }
     // 2) povuci novosti (sve kolekcije koje nas zanimaju)
     const od = new Date(Math.max(0, LASTPULL-5000)).toISOString();
-    const q = 'haccp_zapisi?select=id,kol,data,deleted,updated_at&updated_at=gt.'+encodeURIComponent(od)
-            + '&kol=in.('+KOL.join(',')+')&order=updated_at.asc&limit=2000';
-    const res = await sbFetch(q);
-    if(!res.ok) throw new Error('Dohvat nije uspio ('+res.status+')');
-    const rows = await res.json();
-    let n=0;
+    let rows = [], n = 0;
+    for(let off=0; off<20000; off+=1000){
+      const q = 'haccp_zapisi?select=id,kol,data,deleted,updated_at&updated_at=gt.'+encodeURIComponent(od)
+              + '&kol=in.('+KOL.join(',')+')&order=updated_at.asc&limit=1000&offset='+off;
+      const res = await sbFetch(q);
+      if(!res.ok) throw new Error('Dohvat nije uspio ('+res.status+')');
+      const dio = await res.json();
+      rows = rows.concat(dio);
+      if(dio.length < 1000) break;
+    }
     rows.forEach(row=>{
       if(!KOL.includes(row.kol)) return;
       const a=DB[row.kol], id=String(row.data && row.data.id || String(row.id).split('|')[1]);
