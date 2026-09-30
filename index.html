@@ -237,6 +237,8 @@ select.npak{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)
   #print .pot{margin-top:44px;display:flex;justify-content:space-between;font-size:10pt;color:#555}
   #print .pot div{border-top:.5px solid #000;padding-top:5px;width:42%}
 }
+
+.verz{text-align:center;color:var(--muted);font-size:12px;margin:18px 0 6px}
 </style>
 </head>
 <body>
@@ -255,7 +257,7 @@ select.npak{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)
    Terenska aplikacija PIŠE samo: posjeti, temp, cdez, dkv, ccp
                         ČITA još: strojevi, djelatnici
    ========================================================= */
-const APP_VER = '1.2.1';
+const APP_VER = '1.2.2';
 const LS = 'pnt_';
 const SB_URL = 'https://vvkyzqvdbbilrsqddnha.supabase.co';
 const SB_KEY = 'sb_publishable_OXQKeW6H3tTPrhNM1qihdg_WHkiB2UN';
@@ -987,7 +989,8 @@ function pgHome(){
   <div class="grp">
     ${row('user','#8e8e93','Prijavljeni', `<span style="color:var(--muted);font-size:14px">${esc((AUTH&&AUTH.email)||'')}</span>`)}
     <div class="fr tap" data-a="lozinka">${ico('shield','#ff9500')}<div class="lb">Promijeni lozinku<small>Postavite lozinku koju samo vi znate</small></div><span class="chev">${ic('chev')}</span></div>
-  </div>`;
+  </div>
+  <p class="verz">HACCP Teren · verzija ${APP_VER}${LASTPULL?` · zadnje preuzimanje ${new Date(LASTPULL).toLocaleDateString('hr-HR')}`:''}</p>`;
 }
 function pgVisit(){
   const v=byId('posjeti', S.visitId); if(!v) return '';
