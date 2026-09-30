@@ -239,6 +239,9 @@ select.npak{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)
 }
 
 .verz{text-align:center;color:var(--muted);font-size:12px;margin:18px 0 6px}
+
+.sif{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.3px;color:var(--muted);
+  background:rgba(120,120,128,.16);border-radius:6px;padding:1px 6px}
 </style>
 </head>
 <body>
@@ -257,7 +260,7 @@ select.npak{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)
    Terenska aplikacija PIŠE samo: posjeti, temp, cdez, dkv, ccp
                         ČITA još: strojevi, djelatnici
    ========================================================= */
-const APP_VER = '1.2.2';
+const APP_VER = '1.3.0';
 const LS = 'pnt_';
 const SB_URL = 'https://vvkyzqvdbbilrsqddnha.supabase.co';
 const SB_KEY = 'sb_publishable_OXQKeW6H3tTPrhNM1qihdg_WHkiB2UN';
@@ -499,6 +502,7 @@ function narPakOpcije(p){
 function narArtikli(){
   return DB.proizvodi.filter(p=>p.naziv).map(p=>({
     id: String(p.id),
+    s: String(p.sifra||'').trim(),
     a: (p.kategorija || p.naziv || '').trim() || 'Ostalo',
     o: p.kategorija ? p.naziv : '',
     pakOpc: narPakOpcije(p)
@@ -512,14 +516,14 @@ const narKomada = n => narMn(n,'komad','komada','komada');
 
 function narStart(stroj, visitId){
   NAR = {stroj: stroj||'', kol:{}, pak:{}, dod:[], nap:'', q:'', forma:false,
-         novi:{a:'', o:'', pak:PAK_DEF[0], q:1}};
+         novi:{s:'', a:'', o:'', pak:PAK_DEF[0], q:1}};
   go({name:'narudzba', visitId: visitId||null});
 }
 function narLinije(){
   const out = [];
   narArtikli().forEach(p=>{ const q = NAR.kol[p.id]||0;
-    if(q) out.push({a:p.a, o:p.o, pak: NAR.pak[p.id]!=null ? NAR.pak[p.id] : p.pakOpc[0], q}); });
-  NAR.dod.forEach(d=>{ if(d.q) out.push({a:d.a, o:d.o, pak:d.pak, q:d.q, novi:true}); });
+    if(q) out.push({s:p.s, a:p.a, o:p.o, pak: NAR.pak[p.id]!=null ? NAR.pak[p.id] : p.pakOpc[0], q}); });
+  NAR.dod.forEach(d=>{ if(d.q) out.push({s:d.s||'', a:d.a, o:d.o, pak:d.pak, q:d.q, novi:true}); });
   return out;
 }
 const narUkKom = l => l.reduce((s,x)=>s+x.q,0);
@@ -529,7 +533,7 @@ const narUkKg  = l => l.reduce((s,x)=>s+x.q*(+x.pak||0),0);
 function pgNarudzba(){
   const svi = narArtikli();
   const q = NAR.q.toLowerCase();
-  const lista = svi.filter(p=>!q || (p.a+' '+p.o).toLowerCase().includes(q));
+  const lista = svi.filter(p=>!q || (p.a+' '+p.o+' '+(p.s||'')).toLowerCase().includes(q));
   const grupe = [...new Set(lista.map(p=>p.a))];
   const lin = narLinije();
   const strojevi = aktivniStrojevi();
@@ -540,7 +544,7 @@ function pgNarudzba(){
     `<select data-nar="stroj">${[['','Općenito / skladište']].concat(strojevi.map(s=>[s.oznaka, s.oznaka+' · '+strojNaziv(s.oznaka)]))
       .map(([v,t])=>`<option value="${esc(v)}" ${v===NAR.stroj?'selected':''}>${esc(t)}</option>`).join('')}</select>`)}</div>
 
-  ${svi.length?`<div class="srch">${ic('srch')}<input placeholder="Pretraži artikl ili okus" value="${esc(NAR.q)}" data-nar="q"></div>`:''}
+  ${svi.length?`<div class="srch">${ic('srch')}<input placeholder="Pretraži artikl, okus ili šifru" value="${esc(NAR.q)}" data-nar="q"></div>`:''}
 
   ${svi.length ? grupe.map(g=>{
       const dio = lista.filter(p=>p.a===g);
@@ -548,7 +552,7 @@ function pgNarudzba(){
       `<div class="grp">${dio.map(p=>{
         const q0 = NAR.kol[p.id]||0, pk = NAR.pak[p.id]!=null ? NAR.pak[p.id] : p.pakOpc[0];
         return `<div class="nrow ${q0?'sel':''}">
-          <div class="nnm"><b>${esc(p.o||p.a)}</b>${p.o?`<span>${esc(p.a)}</span>`:''}</div>
+          <div class="nnm"><b>${esc(p.o||p.a)}</b>${p.s?`<span class="sif">${esc(p.s)}</span>`:''}${p.o?`<span>${esc(p.a)}</span>`:''}</div>
           <div class="nrw">
             <select class="npak" data-nar="pak" data-id="${esc(p.id)}">
               ${[...new Set(p.pakOpc.concat(p.pakOpc.includes(pk)?[]:[pk]))].map(v=>`<option value="${v}" ${v===pk?'selected':''}>${narPakNaziv(v)}</option>`).join('')}
@@ -585,6 +589,7 @@ function pgNarudzba(){
 function narForma(){
   const n = NAR.novi;
   return `${sec('Novi artikal')}<div class="grp">
+    ${row('hash','#8e8e93','Šifra dobavljača', `<input type="text" data-nar="nS" value="${esc(n.s||'')}" placeholder="neobavezno" style="max-width:150px">`)}
     ${row('tag','#5856d6','Naziv', `<input type="text" data-nar="nA" value="${esc(n.a)}" placeholder="npr. Shaker 700 ml" style="max-width:170px">`)}
     ${row('tag','#af52de','Okus / vrsta', `<input type="text" data-nar="nO" value="${esc(n.o)}" placeholder="neobavezno" style="max-width:170px">`)}
     ${row('box','#ff9500','Pakiranje', `<select data-nar="nPak">${PAK_DEF.concat([0]).map(v=>`<option value="${v}" ${v===n.pak?'selected':''}>${narPakNaziv(v)}</option>`).join('')}</select>`)}
@@ -627,9 +632,9 @@ function narPosalji(){
 
 /* ---------- ispis i Excel ---------- */
 function narRedovi(o){
-  const r = [['Artikl','Okus / vrsta','Pakiranje (kg)','Komada','Ukupno (kg)']];
-  (o.stavke||[]).forEach(s=>r.push([s.a||'', s.o||'', (+s.pak||''), (+s.q||0), (+s.pak? +((+s.q||0)*(+s.pak)).toFixed(2) : '')]));
-  r.push(['UKUPNO','','', narUkKom(o.stavke||[]), +narUkKg(o.stavke||[]).toFixed(2)]);
+  const r = [['Šifra','Artikl','Okus / vrsta','Pakiranje (kg)','Komada','Ukupno (kg)']];
+  (o.stavke||[]).forEach(s=>r.push([s.s||'', s.a||'', s.o||'', (+s.pak||''), (+s.q||0), (+s.pak? +((+s.q||0)*(+s.pak)).toFixed(2) : '')]));
+  r.push(['UKUPNO','','','', narUkKom(o.stavke||[]), +narUkKg(o.stavke||[]).toFixed(2)]);
   return r;
 }
 function narXls(id){
@@ -642,9 +647,9 @@ function narPdf(id){
   el.innerHTML = `<h2>Narudžba robe</h2>
     <div class="meta">PERLA NOTTE j.d.o.o.${o.stroj?' · '+esc(o.stroj)+' · '+esc(strojNaziv(o.stroj)):' · općenito / skladište'}<br>
       ${fDate(o.date)} u ${esc(String(o.time||'').slice(0,5))} · naručio: ${esc(o.djelatnik||'')}</div>
-    <table><thead><tr><th>Artikl</th><th>Pakiranje</th><th>Komada</th><th>Ukupno</th></tr></thead>
-    <tbody>${(o.stavke||[]).map(s=>`<tr><td>${esc(s.o||s.a)}${s.o?' <span style="color:#666">('+esc(s.a)+')</span>':''}</td>
-      <td>${s.pak?narKgT(s.pak):'bez težine'}</td><td>${s.q}</td><td>${s.pak?narKgT(s.q*s.pak):'—'}</td></tr>`).join('')}</tbody>
+    <table><thead><tr><th>Šifra</th><th>Artikl</th><th>Komada</th><th>Ukupno</th></tr></thead>
+    <tbody>${(o.stavke||[]).map(s=>`<tr><td>${esc(s.s||'')}</td><td>${esc(s.o||s.a)}${s.o?' <span style="color:#666">('+esc(s.a)+')</span>':''}${s.pak?' · '+narKgT(s.pak):''}</td>
+      <td>${s.q}</td><td>${s.pak?narKgT(s.q*s.pak):'—'}</td></tr>`).join('')}</tbody>
     <tfoot><tr><td colspan="2">Ukupno</td><td>${narUkKom(o.stavke||[])}</td><td>${narKgT(narUkKg(o.stavke||[]))}</td></tr></tfoot></table>
     ${o.napomena?`<p style="margin-top:14px"><b>Napomena:</b> ${esc(o.napomena)}</p>`:''}
     <div class="pot"><div>Naručio</div><div>Odobrio</div></div>`;
@@ -1181,6 +1186,7 @@ function narPolje(el){
   if(k==='q'){ NAR.q=el.value; S.keep=true; render(); setTimeout(()=>{ const i=$('[data-nar="q"]'); if(i){ i.focus(); i.setSelectionRange(i.value.length,i.value.length); } },0); return true; }
   if(k==='pak'){ NAR.pak[el.dataset.id]=+el.value; S.keep=true; render(); return true; }
   if(k==='nap'){ NAR.nap=el.value; return true; }
+  if(k==='nS'){ NAR.novi.s=el.value; return true; }
   if(k==='nA'){ NAR.novi.a=el.value; return true; }
   if(k==='nO'){ NAR.novi.o=el.value; return true; }
   if(k==='nPak'){ NAR.novi.pak=+el.value; return true; }
@@ -1223,8 +1229,8 @@ document.addEventListener('click',e=>{
   if(a==='nodustani'){ NAR.forma=false; S.keep=true; return render(); }
   if(a==='ndodaj'){
     if(!String(NAR.novi.a||'').trim()) return toast('Upišite naziv artikla','err');
-    NAR.dod.push({a:NAR.novi.a.trim(), o:String(NAR.novi.o||'').trim(), pak:+NAR.novi.pak||0, q:Math.max(1,+NAR.novi.q||1)});
-    NAR.novi={a:'',o:'',pak:PAK_DEF[0],q:1}; NAR.forma=false; NAR.q=''; S.keep=true; render(); return toast('Artikl dodan u narudžbu');
+    NAR.dod.push({s:String(NAR.novi.s||'').trim(), a:NAR.novi.a.trim(), o:String(NAR.novi.o||'').trim(), pak:+NAR.novi.pak||0, q:Math.max(1,+NAR.novi.q||1)});
+    NAR.novi={s:'',a:'',o:'',pak:PAK_DEF[0],q:1}; NAR.forma=false; NAR.q=''; S.keep=true; render(); return toast('Artikl dodan u narudžbu');
   }
   if(a==='narSend') return narPosalji();
   if(a==='narPdf') return narPdf(S.narId);
