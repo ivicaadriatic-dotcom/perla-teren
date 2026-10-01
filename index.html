@@ -260,7 +260,7 @@ select.npak{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)
    Terenska aplikacija PIŠE samo: posjeti, temp, cdez, dkv, ccp
                         ČITA još: strojevi, djelatnici
    ========================================================= */
-const APP_VER = '1.3.0';
+const APP_VER = '1.3.1';
 const LS = 'pnt_';
 const SB_URL = 'https://vvkyzqvdbbilrsqddnha.supabase.co';
 const SB_KEY = 'sb_publishable_OXQKeW6H3tTPrhNM1qihdg_WHkiB2UN';
@@ -332,8 +332,16 @@ function authErr(j, st){
   if(st===429) return 'Previše pokušaja – pričekajte malo';
   return m || ('Greška '+st);
 }
+/* fetch koji ne može visjeti zauvijek */
+async function fetchT(url, opt={}, ms=20000){
+  if(typeof AbortController === 'undefined') return fetch(url, opt);
+  const c = new AbortController(); const t = setTimeout(()=>c.abort(), ms);
+  try{ return await fetch(url, Object.assign({}, opt, {signal:c.signal})); }
+  catch(e){ if(e && e.name==='AbortError') throw new Error('Mreža ne odgovara (prekinuto nakon '+Math.round(ms/1000)+' s)'); throw e; }
+  finally{ clearTimeout(t); }
+}
 async function authCall(grant, body){
-  const r = await fetch(SB_URL+'/auth/v1/token?grant_type='+grant,
+  const r = await fetchT(SB_URL+'/auth/v1/token?grant_type='+grant,
     {method:'POST', headers:{apikey:SB_KEY,'Content-Type':'application/json'}, body:JSON.stringify(body)});
   let j=null; try{ j=await r.json(); }catch(e){}
   if(!r.ok){ const e=new Error(authErr(j, r.status)); e.status=r.status; throw e; }
@@ -360,18 +368,22 @@ async function authLogout(){
 /* ---------- sinkronizacija ---------- */
 let SYNC = {state:'idle', msg:''};
 function setSync(state, msg){ SYNC={state,msg}; const el=$('#sync'); if(el) el.className='dot '+state, el.title=msg||''; }
-let syncT=null, syncing=false;
+let syncT=null, syncing=false, syncStart=0;
 function planSync(ms=1200){ clearTimeout(syncT); syncT=setTimeout(()=>syncNow(), ms); }
 
 async function sbFetch(path, opt={}){
   const h = Object.assign({apikey:SB_KEY, Authorization:'Bearer '+AUTH.access_token, 'Content-Type':'application/json'}, opt.headers||{});
-  return fetch(SB_URL+'/rest/v1/'+path, Object.assign({}, opt, {headers:h}));
+  return fetchT(SB_URL+'/rest/v1/'+path, Object.assign({}, opt, {headers:h}));
 }
 async function syncNow(manual){
-  if(syncing || !AUTH) return;
+  if(!AUTH) return;
+  if(syncing){
+    if(Date.now() - syncStart < 60000) return;      // još traje
+    syncing = false;                                 // zaglavilo se – kreni ispočetka
+  }
   if(!navigator.onLine){ setSync('off','Izvan mreže – spremljeno na uređaju'); return; }
   if(!await authFresh()){ setSync('off','Prijava je istekla'); return; }
-  syncing = true; setSync('busy','Sinkronizacija…');
+  syncing = true; syncStart = Date.now(); setSync('busy','Sinkronizacija…');
   try{
     // 1) pošalji svoje izmjene
     const keys = Object.keys(DIRTY);
