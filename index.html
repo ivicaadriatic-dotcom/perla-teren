@@ -260,7 +260,7 @@ select.npak{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg)
    Terenska aplikacija PIŠE samo: posjeti, temp, cdez, dkv, ccp
                         ČITA još: strojevi, djelatnici
    ========================================================= */
-const APP_VER = '1.3.2';
+const APP_VER = '1.3.3';
 const LS = 'pnt_';
 const SB_URL = 'https://vvkyzqvdbbilrsqddnha.supabase.co';
 const SB_KEY = 'sb_publishable_OXQKeW6H3tTPrhNM1qihdg_WHkiB2UN';
@@ -402,6 +402,8 @@ async function syncNow(manual){
       keys.forEach(k=>delete DIRTY[k]);
     }
     // 2) povuci novosti (sve kolekcije koje nas zanimaju)
+    // sigurnosna mreža: ako neki registar još nije stigao, povuci sve iz početka
+    if(!DB.proizvodi.length || !DB.strojevi.length || !DB.djelatnici.length) LASTPULL = 0;
     // razmak od minute: sat uređaja i sat baze ne moraju biti savršeno usklađeni
     const od = new Date(Math.max(0, LASTPULL-60000)).toISOString();
     let rows = [], n = 0;
@@ -1011,7 +1013,7 @@ function pgHome(){
     ${row('user','#8e8e93','Prijavljeni', `<span style="color:var(--muted);font-size:14px">${esc((AUTH&&AUTH.email)||'')}</span>`)}
     <div class="fr tap" data-a="lozinka">${ico('shield','#ff9500')}<div class="lb">Promijeni lozinku<small>Postavite lozinku koju samo vi znate</small></div><span class="chev">${ic('chev')}</span></div>
   </div>
-  <p class="verz">HACCP Teren · verzija ${APP_VER}${LASTPULL?` · zadnje preuzimanje ${new Date(LASTPULL).toLocaleDateString('hr-HR')}`:''}</p>`;
+  <p class="verz">HACCP Teren · verzija ${APP_VER} · ${DB.proizvodi.length} proizvoda${LASTPULL?` · zadnje preuzimanje ${new Date(LASTPULL).toLocaleDateString('hr-HR')}`:''}</p>`;
 }
 function pgVisit(){
   const v=byId('posjeti', S.visitId); if(!v) return '';

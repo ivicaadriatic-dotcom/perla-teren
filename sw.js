@@ -1,4 +1,4 @@
-const CACHE = 'perla-teren-v1.3.2';
+const CACHE = 'perla-teren-v1.3.3';
 const FILES = ['./', './index.html', './manifest.json',
   './icons/icon-192x192.png', './icons/icon-512x512.png', './icons/apple-touch-icon.png'];
 
